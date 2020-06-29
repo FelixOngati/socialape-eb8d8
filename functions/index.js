@@ -1,6 +1,10 @@
 const functions = require('firebase-functions');
 
-const { getAllScreams, postOneScream } = require('./handlers/screams');
+const { 
+    getAllScreams, 
+    postOneScream, 
+    getScream, 
+    commentOnScream } = require('./handlers/screams');
 const {signup, 
     login, 
     uploadImage, 
@@ -20,7 +24,8 @@ app.get('/scream/:screamId', getScream);
 // TODO: delete scream
 // TODO: like scream
 // TODO: unlike acream
-// TODO: comment scream
+
+app.post('/scream/:screamId/comment', FBAuth, commentOnScream);
 
 // user routes
 app.post('/signup', signup);
