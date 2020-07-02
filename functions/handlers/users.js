@@ -5,6 +5,7 @@ const firebase = require('firebase');
 firebase.initializeApp(config);
 
 const {validateSignupData, validateLoginData, reduceUserDetails} = require('../util/validators');
+const { user } = require('firebase-functions/lib/providers/auth');
 
 exports.signup = (req, res) => {
     const newUser = {
@@ -153,6 +154,41 @@ exports.uploadImage = (req, res) => {
     busboy.end(req.rawBody);
 };
 
+// Get details of any user
+exports.getUserDetails = (req, res) => {
+    let userData = {};
+    db.doc(`/users/${req.params.handle}`).get()
+    .then( doc => {
+        if(doc.exists){
+            userData = doc.data();
+            return db.collection('screams').where('userHandle', '==', req.params.handle)
+            .orderBy('createdAt', 'desc')
+            .get();
+        }else{
+            return res.status(404).json({error: 'User not found'});
+        }
+    })
+    .then( data => {
+        userData.screams = [];
+        data.forEach(doc => {
+            userData.screams.push({
+                body: doc.data().body,
+                createdAt: doc.data().createdAt,
+                userHandle: doc.data().userHandle,
+                userImage: doc.data().userImage,
+                likeCount: doc.data().likeCount,
+                commentCount: doc.data().commentCount,
+                screamId: doc.id
+            })
+            return res.json(userData);
+        })
+    })
+    .catch(err => {
+        console.error(err);
+        return res.status(500).json({error: err.code});
+    })
+}
+
 // get details of logged in user
 exports.getAuthenticatedUser = (req, res) => {
     let userData = {};
@@ -168,6 +204,22 @@ exports.getAuthenticatedUser = (req, res) => {
         data.forEach(doc => {
             userData.likes.push(doc.data());
         });
+        return db.collection('notifications').where('recipient', '==', req.user.handle)
+        .orderBy('createdAt', 'desc').get();
+    })
+    .then((data) => {
+        userData.notifications = [];
+        data.forEach(doc => {
+            userData.notifications.push({
+                recipient: doc.data().recipient,
+                sender: doc.data().sender,
+                createdAt: doc.data().createdAt,
+                screamId: doc.data().screamId,
+                type: doc.data().type,
+                read: doc.data().read,
+                notificationId: doc.id
+            })
+        })
         return res.json(userData);
     })
     .catch(err => {
@@ -175,3 +227,20 @@ exports.getAuthenticatedUser = (req, res) => {
         return res.status(500).json({error: err.code});
     })
 };
+
+// mark notifications as read
+exports.markNotificationsRead = (req, res) => {
+    let batch = db.batch();
+    req.body.forEach(notificationId => {
+        const notification = db.doc(`/notifications/${notificationId}`);
+        batch.update(notification, {read: true});
+    });
+    batch.commit()
+    .then(() => {
+        return res.json({message: 'Notifications marked read'});
+    })
+    .catch(err => {
+        console.eror(err);
+        return res.status(500).json({error: err.code});
+    });
+}
